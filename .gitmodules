@@ -1,0 +1,4 @@
+[submodule "OCP"]
+	path = OCP
+	url = https://github.com/CadQuery/OCP.git
+	branch=cmake-cleanup
