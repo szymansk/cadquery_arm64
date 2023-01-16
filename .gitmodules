@@ -1,4 +1,6 @@
 [submodule "OCP"]
 	path = OCP
 	url = https://github.com/CadQuery/OCP.git
-	branch=cmake-cleanup
+[submodule "cadquery"]
+	path = cadquery
+	url = https://github.com/CadQuery/cadquery.git
