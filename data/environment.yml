@@ -1,0 +1,14 @@
+name: cadquery-client
+channels:
+  - local
+  - conda-forge
+  - defaults
+dependencies:
+  - python>=3.9.*
+  - cadquery
+  - matplotlib
+  - requests
+  - pip
+  - pip:
+      - cadquery-massembly==1.0.0
+      - jupyter-cadquery==3.5.2

@@ -1,7 +1,7 @@
 ARG ARCH=arm64v8
 # docker pull sickcodes/docker-osx:ventura
 
-from $ARCH/ubuntu:22.04 AS wget
+FROM $ARCH/ubuntu:22.04 AS wget
 RUN apt-get update \
     && apt-get install -y wget \
     && rm -rf /var/lib/apt/lists/*
@@ -11,17 +11,17 @@ ARG ANACONDA3_VERSION='2022.10'
 ARG ARCH=${ARCH}
 
 ### getting conda for different plattforms
-from wget AS anaconda-arm64v8
+FROM wget AS anaconda-arm64v8
 WORKDIR /tmp/
 RUN wget "https://repo.anaconda.com/archive/Anaconda3-$ANACONDA3_VERSION-Linux-aarch64.sh" -O "./anaconda3_$ARCH.sh"
 
-from wget AS anaconda-amd64
+FROM wget AS anaconda-amd64
 RUN wget "https://repo.anaconda.com/archive/Anaconda3-$ANACONDA3_VERSION-Linux-x86_64.sh" -O "./anaconda3_$ARCH.sh"
 
-from wget AS anaconda-ppc64le
+FROM wget AS anaconda-ppc64le
 RUN wget "https://repo.anaconda.com/archive/Anaconda3-$ANACONDA3_VERSION-Linux-$ARCH.sh" -O "./anaconda3_$ARCH.sh" 
 
-from wget AS anaconda-s390x
+FROM wget AS anaconda-s390x
 RUN wget "https://repo.anaconda.com/archive/Anaconda3-$ANACONDA3_VERSION-Linux-$ARCH.sh" -O "./anaconda3_$ARCH.sh" 
 
 
@@ -90,17 +90,6 @@ RUN source ${CONDA_INSTALL_DIR}/bin/activate cpp-py-bindgen \
 RUN source ${CONDA_INSTALL_DIR}/bin/activate cpp-py-bindgen
 RUN export OUTPUT=$(python -c "import toml; print(toml.load('ocp.toml')['output_folder'])")
 
-# im ocp.toml steht >> output_folder = "./OCP"
-# FROM ocp_build as call_pywrap
-# SHELL [ "/bin/bash", "-c" ]
-# WORKDIR /opt/OCP
-# #CMake based pywrap call
-# RUN source ${CONDA_INSTALL_DIR}/bin/activate cpp-py-bindgen \
-#     && echo "find_package(Python3 $PYTHON_VERSION EXACT COMPONENTS Development REQUIRED)" > test.cmake \
-#     && cmake --debug-find -DPython3_FIND_VIRTUALENV=ONLY -P test.cmake \
-#     && cmake -DPython3_EXECUTABLE=/opt/anaconda/envs/cpp-py-bindgen/bin/python \
-#     -DPython3_ROOT_DIR=${CONDA_INSTALL_DIR}/envs/cpp-py-bindgen -B new -S . -G Ninja
-
 
 FROM ocp_build as ocp_build_makefiles
 SHELL [ "/bin/bash", "-c" ]
@@ -145,7 +134,6 @@ RUN apt-get update --allow-insecure-repositories \
         libvtk9.1 \
         rapidjson-dev \
     && rm -rf /var/lib/apt/lists/*
-
 
 FROM cq_lib_base AS cadquery_build_base
 WORKDIR /opt/cadquery
@@ -196,3 +184,37 @@ RUN source ${CONDA_INSTALL_DIR}/bin/activate \
 
 CMD source ${CONDA_INSTALL_DIR}/bin/activate && conda init && conda activate cadquery && echo "Welcome to cadquery" && /usr/bin/bash
 #ENTRYPOINT ["/bin/bash"]
+
+FROM cadquery AS cadquery_root
+USER root
+ENTRYPOINT ["/bin/bash"]
+
+
+
+FROM cadquery_root AS cadquery-client
+SHELL [ "/bin/bash", "-c" ]
+WORKDIR /home/cadquery
+
+RUN apt-get update --allow-insecure-repositories \
+    && DEBIAN_FRONTEND=noninteractiv apt-get install -y \
+        gcc python3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+USER cadquery
+
+RUN source ${CONDA_INSTALL_DIR}/bin/activate \
+    && conda init \
+    && conda activate cadquery \
+    && conda install -c conda-forge requests matplotlib \
+    && pip install jupyter-cadquery==3.5.2 cadquery-massembly==1.0.0 \
+    && conda activate cadquery 
+
+COPY ./data/ ./example/
+RUN echo "conda activate cadquery" >> .bashrc
+
+USER root
+RUN apt-get autoremove \
+    && apt-get clean
+
+USER cadquery
+ENTRYPOINT ["/bin/bash"]

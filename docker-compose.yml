@@ -1,94 +1,20 @@
-version: '3'
+version: '3.9'
 
 services:
-  ocp_base:
-    image: ocp/base:ocp_base
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args: 
-        ARCH: arm64v8
-        PYTHON_VERSION: '3.9'
-        ANACONDA3_VERSION: '2022.10'
-      target: ocp_base
+  cq-client:
+    image: szymanski2adesso/cadquery-client:arm64v8
+    container_name: cq-client
+    volumes:
+      - ./:/home/cadquery/
     stdin_open: true 
     tty: true
+    depends_on:
+      - cq-server
 
-  ocp_build:
-    image: ocp/base:ocp_build
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args: 
-        ARCH: arm64v8
-        PYTHON_VERSION: '3.9'
-        ANACONDA3_VERSION: '2022.10'
-      target: ocp_build
-    stdin_open: true 
-    tty: true
-
-    
-  ocp_compiler_base:
-    image: ocp/base:ocp_compiler_base
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args: 
-        ARCH: arm64v8
-        PYTHON_VERSION: '3.9'
-        ANACONDA3_VERSION: '2022.10'
-      target: ocp_compiler_base
-    stdin_open: true 
-    tty: true
-
-  ocp_build_conda_package:
-    image: ocp/base:ocp_build_conda_package
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args: 
-        ARCH: arm64v8
-        PYTHON_VERSION: '3.9'
-        ANACONDA3_VERSION: '2022.10'
-      target: build_conda_package
-    stdin_open: true 
-    tty: true
-
-  cadquery_build_base:
-    image: cadquery/base:cadquery_build_base
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args: 
-        ARCH: arm64v8
-        PYTHON_VERSION: '3.9'
-        ANACONDA3_VERSION: '2022.10'
-      target: cadquery_build_base
-    stdin_open: true 
-    tty: true
-
-  cadquery:
-    image: cadquery:cadquery
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args: 
-        ARCH: arm64v8
-        PYTHON_VERSION: '3.9'
-        ANACONDA3_VERSION: '2022.10'
-      target: cadquery
-    stdin_open: true 
-    tty: true
-
-  cadquery_dockerhub:
-    image: szymanski2adesso/cadquery:arm64v8
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args: 
-        ARCH: arm64v8
-        PYTHON_VERSION: '3.9'
-        ANACONDA3_VERSION: '2022.10'
-      target: cadquery
-    stdin_open: true 
-    tty: true
+  cq-server:
+    image: szymanski2adesso/cq-server:amd64
+    container_name: cq-server
+    platform: linux/amd64    
+    command: "run"
+    ports:
+      - "5050:5000"
