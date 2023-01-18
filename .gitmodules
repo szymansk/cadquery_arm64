@@ -1,3 +1,0 @@
-[submodule "cadquery-server"]
-	path = cadquery-server
-	url = https://github.com/PhilippFr/cadquery-server.git
