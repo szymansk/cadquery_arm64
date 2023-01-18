@@ -2,106 +2,58 @@ version: '3.9'
 
 services:
   ocp_base:
-    image: ocp/base:ocp_base
+    image: ocp_base:latest
     build:
       context: .
       dockerfile: Dockerfile
+      #cache_from: 
       args: 
-        ARCH: arm64v8
+        TARGETARCH: arm64v8
         PYTHON_VERSION: '3.9'
         ANACONDA3_VERSION: '2022.10'
-      target: ocp_base
+        OCP_COMMIT: 6b7b7325ab4599a8ba9049f176f099574fe64dfc
+        CADQUERY_COMMIT: 4c6f968ac1e411a53d20779309778e1b4a585fa3
+      target: cadquery_build
     stdin_open: true 
     tty: true
 
-  ocp_build:
-    image: ocp/base:ocp_build
+  cadquery_build:
+    image: cadquery_build:latest
     build:
       context: .
       dockerfile: Dockerfile
+      cache_from: 
+        - ocp_base:latest
       args: 
-        ARCH: arm64v8
+        TARGETARCH: arm64v8
         PYTHON_VERSION: '3.9'
         ANACONDA3_VERSION: '2022.10'
-      target: ocp_build
-    stdin_open: true 
-    tty: true
-
-    
-  ocp_compiler_base:
-    image: ocp/base:ocp_compiler_base
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args: 
-        ARCH: arm64v8
-        PYTHON_VERSION: '3.9'
-        ANACONDA3_VERSION: '2022.10'
-      target: ocp_compiler_base
-    stdin_open: true 
-    tty: true
-
-  ocp_build_conda_package:
-    image: ocp/base:ocp_build_conda_package
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args: 
-        ARCH: arm64v8
-        PYTHON_VERSION: '3.9'
-        ANACONDA3_VERSION: '2022.10'
-      target: build_conda_package
-    stdin_open: true 
-    tty: true
-
-  cadquery_build_base:
-    image: cadquery/base:cadquery_build_base
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args: 
-        ARCH: arm64v8
-        PYTHON_VERSION: '3.9'
-        ANACONDA3_VERSION: '2022.10'
-      target: cadquery_build_base
+        OCP_COMMIT: 6b7b7325ab4599a8ba9049f176f099574fe64dfc
+        CADQUERY_COMMIT: 4c6f968ac1e411a53d20779309778e1b4a585fa3
+      target: cadquery_build
     stdin_open: true 
     tty: true
 
   cadquery:
-    image: cadquery:cadquery_root
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args: 
-        ARCH: arm64v8
-        PYTHON_VERSION: '3.9'
-        ANACONDA3_VERSION: '2022.10'
-      target: cadquery_root
-    volumes:
-      - ./data:/home/cadquery/data
-    stdin_open: true 
-    tty: true
-
-  cadquery_dockerhub:
     image: szymanski2adesso/cadquery:latest
     build:
       context: .
       dockerfile: Dockerfile
       args: 
-        ARCH: arm64v8
+        TARGETARCH: arm64v8
         PYTHON_VERSION: '3.9'
         ANACONDA3_VERSION: '2022.10'
       target: cadquery
     stdin_open: true 
     tty: true
 
-  cadquery-client:
+  cq-client:
     image: szymanski2adesso/cadquery-client:arm64v8
     build:
       context: .
       dockerfile: Dockerfile
       args: 
-        ARCH: arm64v8
+        TARGETARCH: arm64v8
         PYTHON_VERSION: '3.9'
         ANACONDA3_VERSION: '2022.10'
       target: cadquery-client

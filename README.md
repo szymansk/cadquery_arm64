@@ -15,4 +15,4 @@ docker compose exec cq-client /bin/bash
 python example/usage_example.py
 ```
 
-Enjoy the result!
+You can add this docker compose file to your development directory. Best is to use visual studio code to attach to the cq-client for development.

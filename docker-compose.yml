@@ -5,7 +5,7 @@ services:
     image: szymanski2adesso/cadquery-client:arm64v8
     container_name: cq-client
     volumes:
-      - ./:/home/cadquery/
+      - ./:/home/cadquery/workspace/
     stdin_open: true 
     tty: true
     depends_on:
