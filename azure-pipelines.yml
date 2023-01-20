@@ -1,0 +1,35 @@
+# Docker
+# Build a Docker image
+# https://docs.microsoft.com/azure/devops/pipelines/languages/docker
+
+trigger:
+- main
+
+resources:
+- repo: self
+
+variables:
+  target_arch: 'arm64v8'
+  python_version: '3.9'
+  anaconda3_version: '2022.10'
+  OCP_COMMIT: 'd7d9e7b06ced339ed9de2e0d4ce4aa9c19fadc55'
+  CADQUERY_COMMIT: 'a2c1f7c4a6176ef431c1dd84170d2caebef71e8e'
+  tag: '$(Build.BuildId)'
+  versions: 'py($python_version)_ac$(anaconda3_version)_$(target_arch)'
+
+
+stages:
+- stage: Build
+  displayName: Build image
+  jobs:
+  - job: Build
+    displayName: Build
+    pool:
+      vmImage: ubuntu-latest
+    steps:
+    - task: Docker@2
+      displayName: Build an image
+      inputs:
+        command: build
+        arguments: "--build-arg TARGETARCH=$(target_arch) --build-arg PYTHON_VERSION=$(python_version) --build-arg ANACONDA3_VERSION=$(anaconda3_version) --build-arg OCP_COMMIT=$(OCP_COMMIT) --build-arg CADQUERY_COMMIT=$(CADQUERY_COMMIT)'
+        dockerfile: '$(Build.SourcesDirectory)/Dockerfile'
