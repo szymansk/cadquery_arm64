@@ -31,5 +31,5 @@ stages:
       displayName: Build an image
       inputs:
         command: build
-        arguments: "--build-arg TARGETARCH=$(target_arch) --build-arg PYTHON_VERSION=$(python_version) --build-arg ANACONDA3_VERSION=$(anaconda3_version) --build-arg OCP_COMMIT=$(OCP_COMMIT) --build-arg CADQUERY_COMMIT=$(CADQUERY_COMMIT)'
+        arguments: '--build-arg TARGETARCH=$(target_arch) --build-arg PYTHON_VERSION=$(python_version) --build-arg ANACONDA3_VERSION=$(anaconda3_version) --build-arg OCP_COMMIT=$(OCP_COMMIT) --build-arg CADQUERY_COMMIT=$(CADQUERY_COMMIT)'
         dockerfile: '$(Build.SourcesDirectory)/Dockerfile'
