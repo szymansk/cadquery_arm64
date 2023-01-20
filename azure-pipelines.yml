@@ -15,7 +15,7 @@ variables:
   OCP_COMMIT: 'd7d9e7b06ced339ed9de2e0d4ce4aa9c19fadc55'
   CADQUERY_COMMIT: 'a2c1f7c4a6176ef431c1dd84170d2caebef71e8e'
   tag: '$(Build.BuildId)'
-  versions: 'py($python_version)_ac$(anaconda3_version)_$(target_arch)'
+  versions: 'py$(python_version)_ac$(anaconda3_version)_$(target_arch)'
 
 
 stages:
