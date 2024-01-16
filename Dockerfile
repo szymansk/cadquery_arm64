@@ -1,5 +1,6 @@
 ARG TARGETARCH=arm64v8
 ARG BASE_IMAGE=ubuntu:22.04
+ARG BASE="${TARGETARCH}/${BASE_IMAGE}"
 # docker pull sickcodes/docker-osx:ventura
 
 FROM ${TARGETARCH}/ubuntu:22.04 AS wget
@@ -8,7 +9,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 ARG PYTHON_VERSION='3.9'
-ARG ANACONDA3_VERSION='2022.10'
+ARG ANACONDA3_VERSION='2023.09-0'
 ARG ARCH=${TARGETARCH}
 
 ### getting conda for different plattforms
@@ -28,8 +29,8 @@ RUN wget "https://repo.anaconda.com/archive/Anaconda3-$ANACONDA3_VERSION-Linux-$
 
 FROM anaconda-${TARGETARCH} as conda_build
 SHELL [ "/bin/bash", "-c" ]
-ENV CONDA_INSTALL_DIR /opt/anaconda
-ARG ARCH ${TARGETARCH}
+ENV CONDA_INSTALL_DIR=/opt/anaconda
+ARG ARCH=${TARGETARCH}
 WORKDIR /tmp/
 RUN /bin/bash ./anaconda3_${ARCH}.sh -b -p${CONDA_INSTALL_DIR} \
     && rm ./anaconda3_${ARCH}.sh
@@ -40,22 +41,29 @@ RUN source ${CONDA_INSTALL_DIR}/bin/activate \
 
 FROM conda_build AS ocp_lib_base
 RUN apt-get update --allow-insecure-repositories \
-    && DEBIAN_FRONTEND=noninteractiv apt-get install -y \
+    && DEBIAN_FRONTEND=noninteractiv apt-get -y install \
+        --no-install-recommends \
         mesa-common-dev libegl1-mesa-dev libgl1-mesa-dev libglu1-mesa-dev freeglut3-dev \
         libvtk9-dev \
         qtcreator qtbase5-dev \
         rapidjson-dev \
         git \
+    && apt-get clean \
+    && apt-get autoremove \
     && rm -rf /var/lib/apt/lists/*
 
 FROM ocp_lib_base AS ocp_compiler_base
 RUN apt-get update --allow-insecure-repositories \
-    && apt-get install -y software-properties-common 
+    && DEBIAN_FRONTEND=noninteractiv apt-get -y install \
+        --no-install-recommends \
+    && apt-get install -y software-properties-common \
+    && apt-get autoclean
 
 RUN add-apt-repository -y universe
 
 RUN apt-get update --allow-insecure-repositories \
-    && apt-get install -y \
+    && DEBIAN_FRONTEND=noninteractiv apt-get -y install \
+        --no-install-recommends \
         wget \
         build-essential \
         cmake \
@@ -65,10 +73,12 @@ RUN apt-get update --allow-insecure-repositories \
         ccache \
         ninja-build \
     && apt-get -y upgrade \
+    && apt-get clean \
+    && apt-get autoremove \
     && rm -rf /var/lib/apt/lists/*
 
 FROM ocp_compiler_base as ocp_copy
-ARG OCP_COMMIT 6b7b7325ab4599a8ba9049f176f099574fe64dfc
+ARG OCP_COMMIT=6b7b7325ab4599a8ba9049f176f099574fe64dfc
 # COPY ./OCP /opt/OCP
 RUN git clone https://github.com/CadQuery/OCP.git /opt/OCP \
     && cd /opt/OCP \
@@ -86,7 +96,7 @@ ENV CPP_PY_BINDGEN=${CONDA_INSTALL_DIR}/envs/cpp-py-bindgen
 RUN source ${CONDA_INSTALL_DIR}/bin/activate \
     && sed -e s/python=.../python=$PYTHON_VERSION/  ${CONDA_ENV} > _${CONDA_ENV} \
     && conda init \
-    && conda env create -f _env.yml \
+    && conda env create -f _env.yml -vv \
     && conda install -n cpp-py-bindgen -y python=${PYTHON_VERSION}
 
 
@@ -128,20 +138,22 @@ RUN source ${CONDA_INSTALL_DIR}/bin/activate \
 
 FROM conda_build AS cq_lib_base
 RUN apt-get update --allow-insecure-repositories \
-    && DEBIAN_FRONTEND=noninteractiv apt-get install -y \
-        libegl1-mesa libglu1-mesa freeglut3 \
+    && DEBIAN_FRONTEND=noninteractiv apt-get -y install \
+        --no-install-recommends \
+        libegl1-mesa libglu1-mesa freeglut3\
         libvtk9.1 \
         rapidjson-dev \
         git \
+    && apt-get clean \
+    && apt-get autoremove \
     && rm -rf /var/lib/apt/lists/*
+# eventuell muss libgl-dev noch installiert werden
 
 FROM cq_lib_base AS cadquery_build_base
 WORKDIR /opt/cadquery
-ARG CADQUERY_COMMIT 4c6f968ac1e411a53d20779309778e1b4a585fa3
-# COPY ./cadquery .
+ARG CADQUERY_COMMIT=4c6f968ac1e411a53d20779309778e1b4a585fa3.
 RUN git clone https://github.com/CadQuery/cadquery.git /opt/cadquery \
     && git checkout ${CADQUERY_COMMIT}
-#COPY ./conda-bld /opt/anaconda/conda-bld
 
 COPY --from=build_conda_package ${CONDA_INSTALL_DIR}/conda-bld ${CONDA_INSTALL_DIR}/conda-bld
 RUN sed -e 's/\"cadquery-ocp/#\"cadquery-ocp/'  setup.py > _setup.py \
@@ -149,7 +161,7 @@ RUN sed -e 's/\"cadquery-ocp/#\"cadquery-ocp/'  setup.py > _setup.py \
     && sed -e 's/defaults/defaults\n  - local/' environment.yml > _environment.yml && mv _environment.yml environment.yml
 
 FROM cadquery_build_base as cadquery_build
-ENV export PACKAGE_VERSION=2.1
+ENV PACKAGE_VERSION=2.1
 ENV PYTHON_VERSION=${PYTHON_VERSION}
 RUN source ${CONDA_INSTALL_DIR}/bin/activate \
     && conda install -y conda-build \
@@ -171,25 +183,22 @@ RUN source ${CONDA_INSTALL_DIR}/bin/activate \
 
 RUN source ${CONDA_INSTALL_DIR}/bin/activate \
     && conda activate --no-stack  cadquery \
-    && conda clean -y -a \
+    && apt-get clean \
+    && apt-get autoremove \
     && du -hs ${CONDA_INSTALL_DIR}
 
 CMD source ${CONDA_INSTALL_DIR}/bin/activate && conda init && conda activate cadquery && echo "Welcome to cadquery" && /usr/bin/bash
-#ENTRYPOINT ["/bin/bash"]
 
-FROM cadquery AS cadquery_root
-USER root
-ENTRYPOINT ["/bin/bash"]
-
-
-
-FROM cadquery_root AS cadquery-client
+FROM cadquery AS cadquery-client
 SHELL [ "/bin/bash", "-c" ]
 WORKDIR /home/cadquery
 
 RUN apt-get update --allow-insecure-repositories \
-    && DEBIAN_FRONTEND=noninteractiv apt-get install -y \
+    && DEBIAN_FRONTEND=noninteractiv apt-get -y install \
+        --no-install-recommends \
         gcc python3-dev \
+    && apt-get clean \
+    && apt-get autoremove \
     && rm -rf /var/lib/apt/lists/*
 
 RUN source ${CONDA_INSTALL_DIR}/bin/activate \
@@ -202,9 +211,6 @@ RUN source ${CONDA_INSTALL_DIR}/bin/activate \
 RUN git clone --depth 1 https://github.com/PhilippFr/cadquery-server.git cs \
 && mv cs/examples . \
 && rm -rf cs
-
-RUN apt-get autoremove \
-    && apt-get clean
 
 RUN echo "conda activate cadquery" >> /root/.bashrc
 

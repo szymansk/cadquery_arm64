@@ -6,13 +6,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      #cache_from: 
       args: 
         TARGETARCH: arm64v8
         PYTHON_VERSION: '3.9'
         ANACONDA3_VERSION: '2022.10'
-        OCP_COMMIT: 6b7b7325ab4599a8ba9049f176f099574fe64dfc
-        CADQUERY_COMMIT: 4c6f968ac1e411a53d20779309778e1b4a585fa3
+        OCP_COMMIT: d7d9e7b06ced339ed9de2e0d4ce4aa9c19fadc55
+        CADQUERY_COMMIT: a2c1f7c4a6176ef431c1dd84170d2caebef71e8e
       target: cadquery_build
     stdin_open: true 
     tty: true
@@ -27,9 +26,9 @@ services:
       args: 
         TARGETARCH: arm64v8
         PYTHON_VERSION: '3.9'
-        ANACONDA3_VERSION: '2022.10'
-        OCP_COMMIT: 6b7b7325ab4599a8ba9049f176f099574fe64dfc
-        CADQUERY_COMMIT: 4c6f968ac1e411a53d20779309778e1b4a585fa3
+        ANACONDA3_VERSION: '2022.11'
+        OCP_COMMIT: d7d9e7b06ced339ed9de2e0d4ce4aa9c19fadc55
+        CADQUERY_COMMIT: a2c1f7c4a6176ef431c1dd84170d2caebef71e8e
       target: cadquery_build
     stdin_open: true 
     tty: true
@@ -39,19 +38,23 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      cache_from: 
+        - cadquery_build:latest
       args: 
         TARGETARCH: arm64v8
         PYTHON_VERSION: '3.9'
-        ANACONDA3_VERSION: '2022.10'
+        ANACONDA3_VERSION: '2022.11'
       target: cadquery
     stdin_open: true 
     tty: true
 
-  cq-client:
+  cadquery-client:
     image: szymanski2adesso/cadquery-client:arm64v8
     build:
       context: .
       dockerfile: Dockerfile
+      cache_from: 
+        - szymanski2adesso/cadquery:latest
       args: 
         TARGETARCH: arm64v8
         PYTHON_VERSION: '3.9'
