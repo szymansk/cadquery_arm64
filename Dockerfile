@@ -48,6 +48,7 @@ RUN apt-get update --allow-insecure-repositories \
         qtcreator qtbase5-dev \
         rapidjson-dev \
         git \
+    && apt-get -y upgrade \
     && apt-get clean \
     && apt-get autoremove \
     && rm -rf /var/lib/apt/lists/*
@@ -56,8 +57,11 @@ FROM ocp_lib_base AS ocp_compiler_base
 RUN apt-get update --allow-insecure-repositories \
     && DEBIAN_FRONTEND=noninteractiv apt-get -y install \
         --no-install-recommends \
-    && apt-get install -y software-properties-common \
-    && apt-get autoclean
+        software-properties-common \
+    && apt-get -y upgrade \
+    && apt-get clean \
+    && apt-get autoclean \
+    && rm -rf /var/lib/apt/lists/*
 
 RUN add-apt-repository -y universe
 
