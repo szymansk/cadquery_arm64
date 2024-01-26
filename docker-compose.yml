@@ -2,7 +2,7 @@ version: '3.9'
 
 services:
   cq-client:
-    image: szymanski2adesso/cadquery-client:arm64v8
+    image: szymanski2adesso/cadquery-client:2.4.0
     container_name: cq-client
     volumes:
       - ./:/home/cadquery/workspace/
@@ -12,7 +12,7 @@ services:
       - cq-server
 
   cq-server:
-    image: szymanski2adesso/cq-server:amd64
+    image: szymanski2adesso/cq-server:2.4.0
     container_name: cq-server
     platform: linux/amd64    
     command: "run"
