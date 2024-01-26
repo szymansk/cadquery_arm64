@@ -1,62 +1,67 @@
 ARG TARGETARCH=arm64v8
 ARG BASE_IMAGE=ubuntu:22.04
+ARG BASE="${TARGETARCH}/${BASE_IMAGE}"
 # docker pull sickcodes/docker-osx:ventura
 
 FROM ${TARGETARCH}/ubuntu:22.04 AS wget
 RUN apt-get update \
-    && apt-get install -y wget \
+    && apt-get install -y \
+        wget \
+        software-properties-common \
     && rm -rf /var/lib/apt/lists/*
 
-ARG PYTHON_VERSION='3.9'
-ARG ANACONDA3_VERSION='2022.10'
+ARG PYTHON_VERSION='3.11'
+ARG CONDA_DIST='miniconda3'
+ARG CONDA_VERSION='2023.09-0'
 ARG ARCH=${TARGETARCH}
 
 ### getting conda for different plattforms
 FROM wget AS anaconda-arm64v8
 WORKDIR /tmp/
-RUN wget "https://repo.anaconda.com/archive/Anaconda3-$ANACONDA3_VERSION-Linux-aarch64.sh" -O "./anaconda3_$ARCH.sh"
+#RUN wget "https://repo.anaconda.com/archive/Anaconda3-$CONDA_VERSION-Linux-aarch64.sh" -O "./anaconda3_$ARCH.sh"
+RUN wget "https://repo.anaconda.com/miniconda/Miniconda3-py311_23.11.0-2-Linux-aarch64.sh" -O "./miniconda3_$ARCH.sh"
 
 FROM wget AS anaconda-amd64
-RUN wget "https://repo.anaconda.com/archive/Anaconda3-$ANACONDA3_VERSION-Linux-x86_64.sh" -O "./anaconda3_$ARCH.sh"
+WORKDIR /tmp/
+RUN wget "https://repo.anaconda.com/archive/Anaconda3-$CONDA_VERSION-Linux-x86_64.sh" -O "./anaconda3_$ARCH.sh"
 
 FROM wget AS anaconda-ppc64le
-RUN wget "https://repo.anaconda.com/archive/Anaconda3-$ANACONDA3_VERSION-Linux-$ARCH.sh" -O "./anaconda3_$ARCH.sh" 
+WORKDIR /tmp/
+RUN wget "https://repo.anaconda.com/archive/Anaconda3-$CONDA_VERSION-Linux-$ARCH.sh" -O "./anaconda3_$ARCH.sh" 
 
 FROM wget AS anaconda-s390x
-RUN wget "https://repo.anaconda.com/archive/Anaconda3-$ANACONDA3_VERSION-Linux-$ARCH.sh" -O "./anaconda3_$ARCH.sh" 
+WORKDIR /tmp/
+RUN wget "https://repo.anaconda.com/archive/Anaconda3-$CONDA_VERSION-Linux-$ARCH.sh" -O "./anaconda3_$ARCH.sh" 
 
 
 FROM anaconda-${TARGETARCH} as conda_build
 SHELL [ "/bin/bash", "-c" ]
-ENV CONDA_INSTALL_DIR /opt/anaconda
-ARG ARCH ${TARGETARCH}
+ENV CONDA_INSTALL_DIR=/opt/anaconda
+ARG ARCH=${TARGETARCH}
 WORKDIR /tmp/
-RUN /bin/bash ./anaconda3_${ARCH}.sh -b -p${CONDA_INSTALL_DIR} \
-    && rm ./anaconda3_${ARCH}.sh
+RUN /bin/bash ./miniconda3_${ARCH}.sh -b -p${CONDA_INSTALL_DIR} \
+    && rm ./miniconda3_${ARCH}.sh
+
+#RUN /bin/bash ./anaconda3_${ARCH}.sh -b -p${CONDA_INSTALL_DIR} \
+#    && rm ./anaconda3_${ARCH}.sh
 
 RUN source ${CONDA_INSTALL_DIR}/bin/activate \
     && conda init \
     && conda update -y conda 
 
+#######################
+###### OCP BUILD ######
+#######################
 FROM conda_build AS ocp_lib_base
+RUN add-apt-repository -y universe
 RUN apt-get update --allow-insecure-repositories \
-    && DEBIAN_FRONTEND=noninteractiv apt-get install -y \
+    && DEBIAN_FRONTEND=noninteractiv apt-get -y install \
+        --no-install-recommends \
         mesa-common-dev libegl1-mesa-dev libgl1-mesa-dev libglu1-mesa-dev freeglut3-dev \
         libvtk9-dev \
         qtcreator qtbase5-dev \
         rapidjson-dev \
         git \
-    && rm -rf /var/lib/apt/lists/*
-
-FROM ocp_lib_base AS ocp_compiler_base
-RUN apt-get update --allow-insecure-repositories \
-    && apt-get install -y software-properties-common 
-
-RUN add-apt-repository -y universe
-
-RUN apt-get update --allow-insecure-repositories \
-    && apt-get install -y \
-        wget \
         build-essential \
         cmake \
         clang \
@@ -65,11 +70,13 @@ RUN apt-get update --allow-insecure-repositories \
         ccache \
         ninja-build \
     && apt-get -y upgrade \
+    && apt-get clean \
+    && apt-get autoremove \
     && rm -rf /var/lib/apt/lists/*
 
-FROM ocp_compiler_base as ocp_copy
-ARG OCP_COMMIT 6b7b7325ab4599a8ba9049f176f099574fe64dfc
-# COPY ./OCP /opt/OCP
+
+FROM ocp_lib_base as ocp_copy
+ARG OCP_COMMIT=occt772
 RUN git clone https://github.com/CadQuery/OCP.git /opt/OCP \
     && cd /opt/OCP \
     && git submodule update --init --recursive \
@@ -80,34 +87,51 @@ SHELL [ "/bin/bash", "-c" ]
 
 # COPY ./OCP /opt/OCP
 WORKDIR /opt/OCP
-ENV CONDA_ENV="env.yml"
+ENV CONDA_ENV='environment.devenv.yml'
 ENV CPP_PY_BINDGEN=${CONDA_INSTALL_DIR}/envs/cpp-py-bindgen
+
+RUN sed -e 's/libcxx=.*/libcxx=/' \
+    -e 's/boost=.*/boost=1.84.*/'  \     
+    -e "s/python=.*/python=${PYTHON_VERSION}/" ${CONDA_ENV} > _env.yml    
 
 RUN source ${CONDA_INSTALL_DIR}/bin/activate \
-    && sed -e s/python=.../python=$PYTHON_VERSION/  ${CONDA_ENV} > _${CONDA_ENV} \
     && conda init \
-    && conda env create -f _env.yml \
-    && conda install -n cpp-py-bindgen -y python=${PYTHON_VERSION}
+    && conda update -y conda \
+    && conda env create -f _env.yml -vv \
+    && conda install -n cpp-py-bindgen -y python=${PYTHON_VERSION} \
+    && conda info -a \
+    && conda list \
+    && which python \
+    && env
 
 
-FROM ocp_build as ocp_build_makefiles
+FROM ocp_build as ocp_build_pywrap
 SHELL [ "/bin/bash", "-c" ]
 WORKDIR /opt/OCP
-ENV CPP_PY_BINDGEN=${CONDA_INSTALL_DIR}/envs/cpp-py-bindgen
 
+# build occt bindings with pywrap
 RUN source ${CONDA_INSTALL_DIR}/bin/activate cpp-py-bindgen \
-    && cmake -DPython3_FIND_VIRTUALENV=ONLY -DPython3_EXECUTABLE=${CPP_PY_BINDGEN}/bin/python \
-    -DPython3_ROOT_DIR=${CPP_PY_BINDGEN} -B build -S ../OCP -G Ninja -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_C_COMPILER_LAUNCHER="ccache" -DCMAKE_CXX_COMPILER_LAUNCHER="ccache"
+    && cmake -DPython_ROOT_DIR=$CONDA_PREFIX -DPython3_ROOT_DIR=$CONDA_PREFIX \
+          -DPython_FIND_VIRTUALENV=ONLY -DPython3_FIND_VIRTUALENV=ONLY \
+          -B new -S . -G Ninja
+
+FROM ocp_build_pywrap as ocp_build_makefiles
+SHELL [ "/bin/bash", "-c" ]
+WORKDIR /opt/OCP
+# generate occt wrapper Makefiles
+RUN source ${CONDA_INSTALL_DIR}/bin/activate cpp-py-bindgen \
+    && cmake -B build -S ./OCP -G Ninja -DCMAKE_BUILD_TYPE=Release
 
 FROM ocp_build_makefiles as ocp_base
 SHELL [ "/bin/bash", "-c" ]
 WORKDIR /opt/OCP
-RUN cmake --build build -j 4 -- -k 0; exit 0 
-RUN cmake --build build -j 2 -- -k 0; exit 0 
-RUN cmake --build build -- -k 0; exit 0 
+
+# build occt wrapper
+RUN cmake --build build -j 4 -- -k 0; exit 0
+RUN cmake --build build -j 2 -- -k 0; exit 0
 RUN cmake --build build -- -k 0 \
-    && cmake --install build 
+    && cmake --install build \
+    && rm -rf build/CMakeFiles 
 
 # test - 
 RUN source ${CONDA_INSTALL_DIR}/bin/activate \
@@ -118,46 +142,85 @@ RUN source ${CONDA_INSTALL_DIR}/bin/activate \
 FROM ocp_base as build_conda_package
 WORKDIR /opt/OCP
 ENV PYTHON_VERSION=${PYTHON_VERSION}
+
+#RUN conda create -n build -y -c conda-forge python=${PYTHON_VERSION} conda-build anaconda-client && \
+#    && source ${CONDA_INSTALL_DIR}/bin/activate build \
+#    && conda build --token $TOKEN --user cadquery --label dev -c conda-forge --override-channels conda
+
 RUN source ${CONDA_INSTALL_DIR}/bin/activate \
     && conda install -y conda-build \
     && conda create -y -n conda-build -y python=${PYTHON_VERSION} 
 
 RUN source ${CONDA_INSTALL_DIR}/bin/activate \
     && conda activate conda-build \
-    && PYTHON_VERSION=${PYTHON_VERSION} conda build -c conda-forge -c conda-forge/label/occt_rc conda
+    && sed -i.bak  -e 's/ noarch: python//' conda/meta.yaml \
+    && PYTHON_VERSION=${PYTHON_VERSION} conda build -c conda-forge -c conda-forge/label/occt_rc conda \
+    && conda build purge
 
+#########################
+###### CONDA BUILD ######
+#########################
 FROM conda_build AS cq_lib_base
 RUN apt-get update --allow-insecure-repositories \
-    && DEBIAN_FRONTEND=noninteractiv apt-get install -y \
-        libegl1-mesa libglu1-mesa freeglut3 \
+    && DEBIAN_FRONTEND=noninteractiv apt-get -y install \
+        --no-install-recommends \
+        libegl1-mesa libglu1-mesa freeglut3\
         libvtk9.1 \
         rapidjson-dev \
         git \
+    && apt-get clean \
+    && apt-get autoremove \
     && rm -rf /var/lib/apt/lists/*
+# eventuell muss libgl-dev noch installiert werden
 
 FROM cq_lib_base AS cadquery_build_base
 WORKDIR /opt/cadquery
-ARG CADQUERY_COMMIT 4c6f968ac1e411a53d20779309778e1b4a585fa3
-# COPY ./cadquery .
+ARG CADQUERY_COMMIT=2.4.0
 RUN git clone https://github.com/CadQuery/cadquery.git /opt/cadquery \
-    && git checkout ${CADQUERY_COMMIT}
-#COPY ./conda-bld /opt/anaconda/conda-bld
+    && git checkout tags/${CADQUERY_COMMIT}
 
 COPY --from=build_conda_package ${CONDA_INSTALL_DIR}/conda-bld ${CONDA_INSTALL_DIR}/conda-bld
-RUN sed -e 's/\"cadquery-ocp/#\"cadquery-ocp/'  setup.py > _setup.py \
-    && sed -e 's/use_scm_version=.*,/use_scm_version=False,/' _setup.py > setup.py \
-    && sed -e 's/defaults/defaults\n  - local/' environment.yml > _environment.yml && mv _environment.yml environment.yml
 
-FROM cadquery_build_base as cadquery_build
-ENV export PACKAGE_VERSION=2.1
-ENV PYTHON_VERSION=${PYTHON_VERSION}
+FROM cadquery_build_base as cadquery_build_ezdxf
+WORKDIR /opt
+ARG EZDXF_TAG=v1.1.4
+#export EZDXF_TAG=v1.1.4
+#export PYTHON_VERSION=3.11
+
+RUN source ${CONDA_INSTALL_DIR}/bin/activate \
+    && git clone https://github.com/mozman/ezdxf.git\
+    && cd ezdxf \
+    && git checkout tags/${EZDXF_TAG} \
+    && conda install -y -c conda-forge cython grayskull conda-build pytest python=${PYTHON_VERSION} \
+    && grayskull pypi --strict-conda-forge ezdxf \
+    && sed -i.bak  -e 's/ noarch: python//' ezdxf/meta.yaml \
+    && conda build -c local -c conda-forge . && \ 
+    conda install -y --use-local ezdxf \
+    && pytest \
+    && conda build purge \
+    && conda remove -y cython grayskull conda-build pytest
+
+
+FROM cadquery_build_ezdxf as cadquery_build
+ARG PACKAGE_VERSION=2.4
+ARG PYTHON_VERSION=${PYTHON_VERSION}
+WORKDIR /opt/cadquery
+
+RUN sed -i.bak -e 's/ezdxf/ezdxf=1.1.4 - local/' \
+        -e 's/ocp=7.7.2/ocp=7.7.2 - local/' environment.yml 
+
+RUN sed -i.bak -e 's/ezdxf/ezdxf=1.1.4/' conda/meta.yaml
+
 RUN source ${CONDA_INSTALL_DIR}/bin/activate \
     && conda install -y conda-build \
     && conda create -y -n conda-build -y python=${PYTHON_VERSION}
 
 RUN source ${CONDA_INSTALL_DIR}/bin/activate conda-build \
-    && PYTHON_VERSION=${PYTHON_VERSION} conda build -c conda-forge -c local conda
+    && PYTHON_VERSION=${PYTHON_VERSION} conda build -c conda-forge -c local conda 
 
+RUN source ${CONDA_INSTALL_DIR}/bin/activate conda-build \
+    && conda build purge \
+    && conda clean --all
 
 FROM cq_lib_base AS cadquery
 COPY --from=cadquery_build ${CONDA_INSTALL_DIR}/conda-bld ${CONDA_INSTALL_DIR}/conda-bld
@@ -165,31 +228,29 @@ SHELL [ "/bin/bash", "-c" ]
 
 WORKDIR /home/cadquery
 RUN source ${CONDA_INSTALL_DIR}/bin/activate \
-&& conda create -y -n cadquery \
-&& conda activate --no-stack cadquery \
-&& conda install --use-local -y -c conda-forge -c local cadquery python=${PYTHON_VERSION} ocp 
+    && conda create -y -n cadquery \
+    && conda activate --no-stack cadquery \
+    && conda install --use-local -y -c conda-forge -c local cadquery python=${PYTHON_VERSION} ocp 
 
 RUN source ${CONDA_INSTALL_DIR}/bin/activate \
     && conda activate --no-stack  cadquery \
-    && conda clean -y -a \
+    && apt-get clean \
+    && apt-get autoremove \
+    && conda clean --all \
     && du -hs ${CONDA_INSTALL_DIR}
 
 CMD source ${CONDA_INSTALL_DIR}/bin/activate && conda init && conda activate cadquery && echo "Welcome to cadquery" && /usr/bin/bash
-#ENTRYPOINT ["/bin/bash"]
 
-FROM cadquery AS cadquery_root
-USER root
-ENTRYPOINT ["/bin/bash"]
-
-
-
-FROM cadquery_root AS cadquery-client
+FROM cadquery AS cadquery-client
 SHELL [ "/bin/bash", "-c" ]
 WORKDIR /home/cadquery
 
 RUN apt-get update --allow-insecure-repositories \
-    && DEBIAN_FRONTEND=noninteractiv apt-get install -y \
+    && DEBIAN_FRONTEND=noninteractiv apt-get -y install \
+        --no-install-recommends \
         gcc python3-dev \
+    && apt-get clean \
+    && apt-get autoremove \
     && rm -rf /var/lib/apt/lists/*
 
 RUN source ${CONDA_INSTALL_DIR}/bin/activate \
@@ -197,14 +258,12 @@ RUN source ${CONDA_INSTALL_DIR}/bin/activate \
     && conda activate cadquery \
     && conda install -y -c conda-forge requests matplotlib \
     && pip install jupyter-cadquery==3.5.2 cadquery-massembly==1.0.0 \
-    && conda activate cadquery 
+    && conda activate cadquery \
+    && conda clean --all
 
 RUN git clone --depth 1 https://github.com/PhilippFr/cadquery-server.git cs \
-&& mv cs/examples . \
-&& rm -rf cs
-
-RUN apt-get autoremove \
-    && apt-get clean
+    && mv cs/examples . \
+    && rm -rf cs
 
 RUN echo "conda activate cadquery" >> /root/.bashrc
 

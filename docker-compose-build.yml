@@ -6,13 +6,13 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      #cache_from: 
       args: 
         TARGETARCH: arm64v8
-        PYTHON_VERSION: '3.9'
-        ANACONDA3_VERSION: '2022.10'
-        OCP_COMMIT: 6b7b7325ab4599a8ba9049f176f099574fe64dfc
-        CADQUERY_COMMIT: 4c6f968ac1e411a53d20779309778e1b4a585fa3
+        PYTHON_VERSION: '3.11'
+        ANACONDA3_VERSION: '2023.09-0'
+        OCP_COMMIT: occt772
+        CADQUERY_COMMIT: '2.4.0'
+        EZDXF_TAG: 'v1.1.4'
       target: cadquery_build
     stdin_open: true 
     tty: true
@@ -26,39 +26,51 @@ services:
         - ocp_base:latest
       args: 
         TARGETARCH: arm64v8
-        PYTHON_VERSION: '3.9'
-        ANACONDA3_VERSION: '2022.10'
-        OCP_COMMIT: 6b7b7325ab4599a8ba9049f176f099574fe64dfc
-        CADQUERY_COMMIT: 4c6f968ac1e411a53d20779309778e1b4a585fa3
+        PYTHON_VERSION: '3.11'
+        ANACONDA3_VERSION: '2023.09-0'
+        OCP_COMMIT: occt772
+        CADQUERY_COMMIT: '2.4.0'
+        EZDXF_TAG: 'v1.1.4'
       target: cadquery_build
     stdin_open: true 
     tty: true
 
   cadquery:
-    image: szymanski2adesso/cadquery:latest
+    image: szymanski2adesso/cadquery:2.4.0
     build:
       context: .
       dockerfile: Dockerfile
+      cache_from: 
+        - cadquery_build:latest
       args: 
         TARGETARCH: arm64v8
-        PYTHON_VERSION: '3.9'
-        ANACONDA3_VERSION: '2022.10'
+        PYTHON_VERSION: '3.11'
+        ANACONDA3_VERSION: '2023.09-0'
+        OCP_COMMIT: occt772
+        CADQUERY_COMMIT: '2.4.0'
+        EZDXF_TAG: 'v1.1.4'
       target: cadquery
     stdin_open: true 
     tty: true
 
-  cq-client:
-    image: szymanski2adesso/cadquery-client:arm64v8
+  cadquery-client:
+    image: szymanski2adesso/cadquery-client:2.4.0
     build:
       context: .
       dockerfile: Dockerfile
+      cache_from: 
+        - szymanski2adesso/cadquery:latest
       args: 
         TARGETARCH: arm64v8
-        PYTHON_VERSION: '3.9'
-        ANACONDA3_VERSION: '2022.10'
+        PYTHON_VERSION: '3.11'
+        ANACONDA3_VERSION: '2023.09-0'
+        OCP_COMMIT: occt772
+        CADQUERY_COMMIT: '2.4.0'
+        EZDXF_TAG: 'v1.1.4'
       target: cadquery-client
     stdin_open: true 
     tty: true
+    entrypoint: ["/bin/bash"]
 
   cq-server:
     image: szymanski2adesso/cq-server:amd64
