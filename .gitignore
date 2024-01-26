@@ -2,3 +2,5 @@
 conda-bld/
 
 .DS_Store
+
+opt/
