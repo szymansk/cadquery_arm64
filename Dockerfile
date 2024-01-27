@@ -171,7 +171,6 @@ RUN apt-get update --allow-insecure-repositories \
     && apt-get clean \
     && apt-get autoremove \
     && rm -rf /var/lib/apt/lists/*
-# eventuell muss libgl-dev noch installiert werden
 
 FROM cq_lib_base AS cadquery_build_base
 WORKDIR /opt/cadquery
@@ -241,6 +240,7 @@ RUN source ${CONDA_INSTALL_DIR}/bin/activate \
 
 CMD source ${CONDA_INSTALL_DIR}/bin/activate && conda init && conda activate cadquery && echo "Welcome to cadquery" && /usr/bin/bash
 
+
 FROM cadquery AS cadquery-client
 SHELL [ "/bin/bash", "-c" ]
 WORKDIR /home/cadquery
@@ -261,10 +261,54 @@ RUN source ${CONDA_INSTALL_DIR}/bin/activate \
     && conda activate cadquery \
     && conda clean --all
 
-RUN git clone --depth 1 https://github.com/PhilippFr/cadquery-server.git cs \
-    && mv cs/examples . \
-    && rm -rf cs
+RUN git clone --depth 1 https://github.com/PhilippFr/cadquery-server.git cs 
 
 RUN echo "conda activate cadquery" >> /root/.bashrc
 
-ENTRYPOINT ["/bin/bash"]
+#ENTRYPOINT ["/bin/bash"]
+
+
+FROM cadquery-client AS cadquery_reduced
+SHELL [ "/bin/bash", "-c" ]
+
+RUN source ${CONDA_INSTALL_DIR}/bin/activate \
+    && conda install -c conda-forge conda-pack
+
+RUN source ${CONDA_INSTALL_DIR}/bin/activate \
+    && conda-pack -n cadquery -o /tmp/env.tar \
+    && mkdir /venv && cd /venv && tar xf /tmp/env.tar \
+    && rm /tmp/env.tar
+
+RUN source ${CONDA_INSTALL_DIR}/bin/activate \
+    && /venv/bin/conda-unpack
+
+
+FROM ${TARGETARCH}/ubuntu:22.04 AS runtime
+SHELL [ "/bin/bash", "-c" ]
+WORKDIR /home/cadquery
+
+# Copy /venv from the previous stage:
+COPY --from=cadquery_reduced /venv /venv
+COPY --from=cadquery-client /home/cadquery/cs /home/cadquery/cs
+
+RUN apt-get update \
+    && apt-get install -y \
+        software-properties-common \
+    && add-apt-repository -y universe 
+
+RUN apt-get update --allow-insecure-repositories \
+    && DEBIAN_FRONTEND=noninteractiv apt-get -y install \
+        --no-install-recommends \
+        libegl1-mesa libglu1-mesa freeglut3\
+        libvtk9.1 \
+        rapidjson-dev \
+    && apt-get clean \
+    && apt-get autoremove \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN echo "source /venv/bin/activate" >> /root/.bashrc
+
+
+#ENTRYPOINT source /venv/bin/activate && \
+#           python -c "import cadquery; print('success!')" && \
+#           python example/usage_example.py

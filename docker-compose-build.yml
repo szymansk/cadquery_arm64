@@ -59,7 +59,7 @@ services:
       context: .
       dockerfile: Dockerfile
       cache_from: 
-        - szymanski2adesso/cadquery:latest
+        - szymanski2adesso/cadquery:2.4.0
       args: 
         TARGETARCH: arm64v8
         PYTHON_VERSION: '3.11'
@@ -81,3 +81,22 @@ services:
     command: "run"
     ports:
       - "5050:5000"
+
+  cadquery-runtime:
+    image: szymanski2adesso/cadquery-runtime:2.4.0
+    build:
+      context: .
+      dockerfile: Dockerfile
+      cache_from: 
+        - szymanski2adesso/cadquery:2.4.0
+      args: 
+        TARGETARCH: arm64v8
+        PYTHON_VERSION: '3.11'
+        ANACONDA3_VERSION: '2023.09-0'
+        OCP_COMMIT: occt772
+        CADQUERY_COMMIT: '2.4.0'
+        EZDXF_TAG: 'v1.1.4'
+      target: runtime
+    stdin_open: true 
+    tty: true
+    entrypoint: ["source /venv/bin/activate"]
